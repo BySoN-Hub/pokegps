@@ -2,55 +2,489 @@
 <html lang="ja">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>私だけのポケモンGO</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Poke-Hybrid Master RPG v21</title>
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
     <style>
-        body, html { margin: 0; padding: 0; height: 100%; width: 100%; }
-        #map { height: 100%; width: 100%; }
-        #ui {
-            position: absolute; bottom: 20px; left: 50%; transform: translateX(-50%);
-            z-index: 1000; background: white; padding: 15px; border-radius: 20px;
-            text-align: center; box-shadow: 0 4px 10px rgba(0,0,0,0.3); font-weight: bold;
+        :root { --blue: #2a75bb; --accent: #ffcb05; --dark: #333; --exp: #3498db; --green: #4caf50; --hp-bg: #ccc; }
+        body { margin: 0; overflow: hidden; background: #000; font-family: sans-serif; user-select: none; }
+        
+        .scene { width: 100vw; height: 100vh; position: absolute; top: 0; left: 0; display: none; overflow: hidden; background: #000; }
+        .scene.active { display: flex; flex-direction: column; z-index: 100; }
+
+        #world-view.active { display: block; }
+        #map-bg { width: 100%; height: 100%; position: absolute; top: 0; left: 0; z-index: 1; pointer-events: none; }
+        #player { width: 80px; height: 80px; position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); z-index: 20; pointer-events: none; }
+        #player img { width: 100%; height: 100%; image-rendering: pixelated; }
+        
+        #mini-status { 
+            position: absolute; bottom: 20px; left: 10px; width: 180px; 
+            background: rgba(0,0,0,0.8); color: #fff; padding: 10px; 
+            border-radius: 15px; border: 2px solid var(--accent); z-index: 110; 
+            display: flex; align-items: center; gap: 10px;
         }
-        /* モンスターの画像のスタイル */
-        .pokemon-icon {
-            filter: drop-shadow(0 0 5px rgba(255,255,0,0.8));
-            cursor: pointer;
-            transition: transform 0.2s;
+        #mini-status img { width: 45px; height: 45px; image-rendering: pixelated; background: rgba(255,255,255,0.1); border-radius: 50%; }
+
+        #system-msg {
+            position: absolute; bottom: 100px; left: 50%; transform: translateX(-50%);
+            background: rgba(0,0,0,0.9); color: #fff; padding: 15px 30px;
+            border-radius: 30px; border: 2px solid var(--accent); z-index: 1000;
+            display: none; white-space: nowrap; font-weight: bold; text-align: center;
         }
-        .pokemon-icon:active { transform: scale(0.8); }
+
+        .wild { width: 80px; height: 80px; position: absolute; z-index: 15; transform: translate(-40px, -40px); cursor: pointer; }
+        .wild img { width: 100%; height: 100%; image-rendering: pixelated; }
+        
+        .building { 
+            width: 60px; height: 60px; position: absolute; z-index: 14; 
+            transform: translate(-30px, -30px); cursor: pointer;
+            display: flex; align-items: center; justify-content: center;
+            font-size: 50px;
+            filter: drop-shadow(0 4px 4px rgba(0,0,0,0.5));
+        }
+
+        .wild-lv-tag { background: rgba(0,0,0,0.8); color: white; font-size: 11px; font-weight: bold; border-radius: 4px; padding: 1px 5px; position: absolute; top: 5px; right: -5px; z-index: 16; border: 1px solid var(--accent); }
+
+        .top-btn { position: absolute; top: 10px; z-index: 110; padding: 10px; border: 2px solid white; border-radius: 8px; color: white; font-weight: bold; font-size: 12px; }
+        #controls { position: absolute; bottom: 30px; right: 20px; z-index: 110; opacity: 0.6; }
+        .d-pad { display: grid; grid-template-columns: repeat(3, 60px); grid-template-rows: repeat(3, 60px); gap: 8px; }
+        .d-pad button { width: 60px; height: 60px; border-radius: 50%; border: 2px solid #fff; background: #444; color: white; font-size: 20px; }
+
+        /* --- バトル --- */
+        #battle-view { background: #87ceeb; }
+        .battle-stage { position: relative; height: 60%; width: 100%; overflow: hidden; z-index: 10; }
+        .battle-sky { position: absolute; top: 0; width: 100%; height: 100%; background: linear-gradient(to bottom, #4facfe 0%, #87ceeb 100%); z-index: 1; }
+        .battle-ground { position: absolute; bottom: 0; width: 100%; height: 40%; background: linear-gradient(to bottom, #2ecc71 0%, #27ae60 100%); border-top: 4px solid #fff; z-index: 2; }
+        .unit-container { position: absolute; width: 140px; display: flex; flex-direction: column; align-items: center; z-index: 10; transition: transform 0.2s ease-out; }
+        #enemy-pos { top: 15%; right: 10%; }
+        #player-pos { bottom: 10%; left: 10%; }
+        .pokemon-img { width: 120px; height: 120px; image-rendering: pixelated; filter: drop-shadow(0 10px 5px rgba(0,0,0,0.2)); }
+        .status-window { width: 140px; background: rgba(255,255,255,0.95); border: 2px solid #444; border-radius: 10px; padding: 6px; font-size: 11px; margin-bottom: 5px; box-shadow: 3px 3px 0 rgba(0,0,0,0.2); }
+        #battle-ui-container { height: 40%; background: #333; display: flex; flex-direction: column; z-index: 120; border-top: 4px solid #555;}
+        #battle-msg { height: 35%; color: white; padding: 12px; box-sizing: border-box; font-size: 16px; background: #222; overflow-y: auto;}
+        #battle-menu { height: 65%; display: grid; grid-template-columns: 1fr 1fr; gap: 10px; padding: 10px; box-sizing: border-box; }
+        #battle-menu button { border: none; border-radius: 8px; font-weight: bold; font-size: 18px; background: #eee; color: #000; box-shadow: 0 4px #999; }
+        #battle-menu button:disabled { background: #555; color: #888; box-shadow: none; }
+
+        .hp-bar-outer { width: 100%; height: 6px; background: var(--hp-bg); border: 1px solid #000; border-radius: 3px; overflow: hidden; margin: 2px 0; }
+        .hp-bar-inner { height: 100%; background: var(--green); transition: width 0.3s; }
+        .exp-bar-outer { width: 100%; height: 4px; background: #eee; border-radius: 2px; overflow: hidden; }
+        .exp-bar-inner { height: 100%; background: var(--exp); transition: width 0.3s; }
+
+        .overlay-scene { background: #ecf0f1; padding: 15px; box-sizing: border-box; z-index: 200; overflow-y: auto; }
+        .box-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 10px; margin-top: 10px; }
+        .box-card { background: #fff; border: 2px solid #ccc; border-radius: 12px; padding: 8px; display: flex; align-items: center; gap: 5px; }
+        .box-card.selected { border-color: var(--accent); background: #fffdf0; box-shadow: 0 0 10px var(--accent); }
+        .box-card img { width: 50px; }
+        #moving-ball { position:absolute; width:35px; height:35px; background:url('https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/items/poke-ball.png') no-repeat center; background-size:contain; display:none; z-index: 500;}
+        @keyframes shake { 0% { transform: translate(0, 0); } 20% { transform: translate(12px, -12px); } 40% { transform: translate(-12px, 12px); } 60% { transform: translate(12px, 12px); } 80% { transform: translate(-12px, -12px); } 100% { transform: translate(0, 0); } }
+        .shake-anim { animation: shake 0.3s ease-in-out; }
     </style>
 </head>
 <body>
 
-    <div id="ui">
-        <span id="status">ポケモンを探そう！</span><br>
-        <small>捕まえた数: <span id="score">0</span></small>
+<div id="system-msg"></div>
+
+<div id="world-view" class="scene active">
+    <div id="mini-status"></div>
+    <div style="position:absolute; top:10px; width:100%; display:flex; justify-content:space-between; padding:0 10px; box-sizing:border-box; z-index:110;">
+        <button class="top-btn" style="position:static; background:#9b59b6; width:80px;" onclick="openBox()">手持ち</button>
+        <button class="top-btn" style="position:static; background:#e67e22; width:80px;" onclick="spawnWilds()">更新</button>
     </div>
-    <div id="map"></div>
+    <div id="map-bg"></div>
+    <div id="player"></div>
+    <div id="wild-layer"></div>
+    <div id="controls">
+        <div class="d-pad">
+            <button style="grid-column:2" onmousedown="startMove(0.0003, 0)" onmouseup="stopMove()" ontouchstart="startMove(0.0003, 0)" ontouchend="stopMove()">▲</button>
+            <button style="grid-column:1" onmousedown="startMove(0, -0.0004)" onmouseup="stopMove()" ontouchstart="startMove(0, -0.0004)" ontouchend="stopMove()">◀</button>
+            <button style="grid-column:2" onmousedown="startMove(-0.0003, 0)" onmouseup="stopMove()" ontouchstart="startMove(-0.0003, 0)" ontouchend="stopMove()">▼</button>
+            <button style="grid-column:3" onmousedown="startMove(0, 0.0004)" onmouseup="stopMove()" ontouchstart="startMove(0, 0.0004)" ontouchend="stopMove()">▶</button>
+        </div>
+    </div>
+</div>
 
-    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
-    <script>
-        const map = L.map('map').setView([35.681236, 139.767125], 18);
-        let score = 0;
+<div id="battle-view" class="scene">
+    <div class="battle-stage">
+        <div id="hit-flash" style="position:absolute; width:100%; height:100%; background:white; opacity:0; z-index:50; pointer-events:none;"></div>
+        <div class="battle-sky"></div>
+        <div class="battle-ground"></div>
+        <div id="enemy-pos" class="unit-container">
+            <div class="status-window"><b id="e-name">---</b> Lv.<span id="e-lv"></span><div class="hp-bar-outer"><div id="e-hp-bar" class="hp-bar-inner"></div></div></div>
+            <img id="e-img" class="pokemon-img" src="">
+        </div>
+        <div id="player-pos" class="unit-container">
+            <img id="p-img" class="pokemon-img" src="">
+            <div class="status-window"><b id="p-name">---</b> Lv.<span id="p-lv"></span><div class="hp-bar-outer"><div id="p-hp-bar" class="hp-bar-inner"></div></div></div>
+        </div>
+        <div id="moving-ball"></div>
+    </div>
+    <div id="battle-ui-container">
+        <div id="battle-msg">どうする？</div>
+        <div id="battle-menu">
+            <button class="b-btn" onclick="attack()" style="background:#e74c3c; color:#fff;">攻撃</button>
+            <button class="b-btn" onclick="tryCapture()" style="background:#f1c40f;">捕まえる</button>
+            <button class="b-btn" onclick="openBox()" style="background:#fff;">ポケモン</button>
+            <button class="b-btn" onclick="endBattle()" style="background:#fff;">逃げる</button>
+        </div>
+    </div>
+</div>
 
+<div id="box-view" class="scene overlay-scene">
+    <div style="display:flex; justify-content:space-between; align-items:center;">
+        <h2 style="color:var(--blue); margin:0;">手持ち</h2>
+        <div style="display:flex; gap:5px;">
+            <div class="candy-count" style="border-color:#9b59b6">💎 <span id="chunk-num">0</span></div>
+            <div class="candy-count">🍬 <span id="candy-num">0</span></div>
+        </div>
+    </div>
+    <div id="active-partner" style="background:#fff; padding:12px; border:3px solid var(--blue); border-radius:15px; margin:15px 0; display:flex; align-items:center; gap:15px;"></div>
+    <div id="box-grid" class="box-grid"></div>
+    <div style="display:grid; grid-template-columns:1fr 1fr; gap:10px; margin-top:auto; padding:10px 0;">
+        <button class="top-btn" style="position:static; background:var(--blue); font-size: 14px;" onclick="handleBoxAction('lead')">先頭にする</button>
+        <button class="top-btn" style="position:static; background:var(--green); font-size: 14px;" onclick="handleBoxAction('level')">アメを使う</button>
+        <button class="top-btn" style="position:static; background:#9b59b6; font-size: 14px; grid-column: span 2;" onclick="handleBoxAction('chunk')">ふしぎな塊を使う(EXP+500)</button>
+    </div>
+    <button class="top-btn" id="box-close-btn" style="position:static; background:#7f8c8d; width:100%;" onclick="closeBox()">戻る</button>
+</div>
+
+<script>
+    let map, myBox = [], wildList = [], currentEnemy = null;
+    let candyCount = 10, chunkCount = 2, selectedBoxIdx = null;
+    let isTransitioning = false, isCapturing = false, isAnimating = false;
+    let currentCoords = { lat: 35.6895, lon: 139.6917 };
+    let moveInterval = null, pcActive = false, pcCoords = null;
+
+    window.onload = async () => { setupMap(); await initStarter(); };
+
+    function setupMap() {
+        if (map) return;
+        map = L.map('map-bg', { zoomControl: false, dragging: false, touchZoom: false, attributionControl: false }).setView([currentCoords.lat, currentCoords.lon], 17);
         L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png').addTo(map);
+        if (navigator.geolocation) {
+            navigator.geolocation.getCurrentPosition(pos => {
+                currentCoords.lat = pos.coords.latitude;
+                currentCoords.lon = pos.coords.longitude;
+                map.setView([currentCoords.lat, currentCoords.lon]);
+                spawnWilds();
+            }, () => spawnWilds());
+        } else { spawnWilds(); }
+    }
 
-        // --- ポケモンを出現させる関数 ---
-        function spawnPokemon(lat, lng) {
-            // PokeAPIからピカチュウの画像を取得（25番がピカチュウ）
-            const pokemonId = 25; 
-            const imageUrl = `https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/${pokemonId}.png`;
+    async function initStarter() {
+        const p = await getPokeData(25, 5);
+        if(p) { myBox = [p]; updateMapUI(); }
+    }
 
-            const icon = L.icon({
-                iconUrl: imageUrl,
-                iconSize: [80, 80],
-                iconAnchor: [40, 40],
-                className: 'pokemon-icon'
-            });
+    async function getPokeData(id, lv) {
+        try {
+            const res = await fetch(`https://pokeapi.co/api/v2/pokemon/${id}`);
+            const d = await res.json();
+            let jpName = d.name.toUpperCase();
+            try {
+                const sRes = await fetch(d.species.url);
+                const sData = await sRes.json();
+                jpName = sData.names.find(n => n.language.name === "ja-Hrkt").name;
+            } catch(e) {}
+            return {
+                id: d.id, name: jpName, lv: lv, exp: 0, nextLv: lv * 50,
+                hp: lv * 12 + 50, maxHp: lv * 12 + 50, atk: lv * 3 + 10,
+                imgFront: d.sprites.front_default, imgBack: d.sprites.back_default || d.sprites.front_default,
+                cries: d.cries ? d.cries.latest : null
+            };
+        } catch(e) { return null; }
+    }
 
-            const marker = L.marker([lat, lng], { icon: icon }).addTo(map);
+    function playCry(url) {
+        if (!url) return;
+        const audio = new Audio(url);
+        audio.volume = 0.5;
+        audio.play();
+    }
 
-            // モンスターをタップした時の処理
-            marker.on('click', () =>
+    function showSystemMsg(text, duration = 2500) {
+        const el = document.getElementById('system-msg');
+        el.innerText = text; el.style.display = 'block';
+        setTimeout(() => { el.style.display = 'none'; }, duration);
+    }
+
+    function switchScene(id) {
+        document.querySelectorAll('.scene').forEach(s => s.classList.remove('active'));
+        document.getElementById(id).classList.add('active');
+    }
+
+    function startMove(dLat, dLon) {
+        if(moveInterval || isTransitioning || currentEnemy) return;
+        const doMove = () => {
+            currentCoords.lat += dLat; currentCoords.lon += dLon;
+            if(map) map.panTo([currentCoords.lat, currentCoords.lon], {animate:true, duration:0.1});
+            checkCollision();
+        };
+        doMove(); moveInterval = setInterval(doMove, 150);
+    }
+    function stopMove() { clearInterval(moveInterval); moveInterval = null; }
+
+    function spawnPokeCenter() {
+        const lat = currentCoords.lat + (Math.random() - 0.5) * 0.006;
+        const lon = currentCoords.lon + (Math.random() - 0.5) * 0.006;
+        pcCoords = { lat, lon, id: 'pc-' + Date.now() }; pcActive = true;
+        const div = document.createElement('div');
+        div.className = 'building'; div.id = pcCoords.id;
+        div.innerText = "🏥"; 
+        document.getElementById('wild-layer').appendChild(div);
+        const sync = () => { if(!map) return; const p = map.latLngToContainerPoint([lat, lon]); div.style.left = p.x + 'px'; div.style.top = p.y + 'px'; };
+        map.on('move', sync); sync();
+    }
+
+    async function spawnWilds() {
+        document.getElementById('wild-layer').innerHTML = ""; 
+        wildList = []; spawnPokeCenter();
+        for(let i=0; i<8; i++) await spawnSingleWild();
+    }
+
+    async function spawnSingleWild() {
+        let id = Math.floor(Math.random() * 151) + 1;
+        const legendaryIds = [144, 145, 146, 150, 151];
+        if (legendaryIds.includes(id) && Math.random() > 0.05) {
+            id = Math.floor(Math.random() * 143) + 1;
+        }
+
+        const uId = 'wild-' + Date.now() + '-' + Math.random(); 
+        const wLat = currentCoords.lat + (Math.random() - 0.5) * 0.015;
+        const wLon = currentCoords.lon + (Math.random() - 0.5) * 0.015;
+        const maxMyLv = myBox.length > 0 ? Math.max(...myBox.map(p => p.lv)) : 5;
+        const wildLv = Math.max(1, maxMyLv + Math.floor(Math.random() * 7) - 3);
+
+        const wp = { uId, id, lv: wildLv, lat: wLat, lon: wLon };
+        wildList.push(wp);
+        const div = document.createElement('div');
+        div.className = 'wild'; div.id = uId;
+        div.innerHTML = `<span class="wild-lv-tag">Lv.${wildLv}</span><img src="https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/${id}.png">`;
+        document.getElementById('wild-layer').appendChild(div);
+        const sync = () => { if(!map) return; const p = map.latLngToContainerPoint([wLat, wLon]); div.style.left = p.x + 'px'; div.style.top = p.y + 'px'; };
+        map.on('move', sync); sync();
+        div.onclick = () => startBattleSequence(wp);
+    }
+
+    function checkCollision() {
+        if(pcActive && pcCoords) {
+            const distPC = Math.sqrt((currentCoords.lat - pcCoords.lat)**2 + (currentCoords.lon - pcCoords.lon)**2);
+            if(distPC < 0.0006) {
+                myBox.forEach(p => p.hp = p.maxHp);
+                updateMapUI(); showSystemMsg("手持ちのポケモンが 全回復しました！");
+                const pcEl = document.getElementById(pcCoords.id); if(pcEl) pcEl.remove();
+                pcActive = false;
+            }
+        }
+        wildList.forEach((wp) => {
+            const dist = Math.sqrt((currentCoords.lat - wp.lat)**2 + (currentCoords.lon - wp.lon)**2);
+            if(dist < 0.0006) { startBattleSequence(wp); }
+        });
+    }
+
+    async function startBattleSequence(wp) {
+        if(isTransitioning) return;
+        isTransitioning = true; stopMove();
+        const wildEl = document.getElementById(wp.uId); if(wildEl) wildEl.remove();
+        wildList = wildList.filter(item => item.uId !== wp.uId);
+        const data = await getPokeData(wp.id, wp.lv);
+        if(!data) { isTransitioning = false; return; }
+        currentEnemy = {...data, hp: data.maxHp, uId: wp.uId};
+
+        // 重要：2回目以降の表示のために画像をリセット
+        const eImg = document.getElementById('e-img');
+        eImg.style.display = 'block';
+        eImg.style.transform = "";
+        eImg.style.transition = "";
+
+        updateBattleUI(); switchScene('battle-view');
+        playCry(currentEnemy.cries); 
+        isTransitioning = false;
+    }
+
+    function updateBattleUI() {
+        if(!currentEnemy || !myBox[0]) return;
+        document.getElementById('e-name').innerText = currentEnemy.name;
+        document.getElementById('e-lv').innerText = currentEnemy.lv;
+        document.getElementById('e-img').src = currentEnemy.imgFront;
+        updateHPBar('e', (currentEnemy.hp/currentEnemy.maxHp*100));
+        const p = myBox[0];
+        document.getElementById('p-name').innerText = p.name;
+        document.getElementById('p-lv').innerText = p.lv;
+        document.getElementById('p-img').src = (p.hp > 0) ? p.imgBack : "";
+        updateHPBar('p', (p.hp/p.maxHp*100));
+        document.getElementById('battle-msg').innerText = `${currentEnemy.name}が あらわれた！`;
+        setButtonsDisabled(p.hp <= 0);
+    }
+
+    function updateHPBar(prefix, percent) {
+        const bar = document.getElementById(`${prefix}-hp-bar`);
+        if(!bar) return;
+        bar.style.width = Math.max(0, percent) + '%';
+        bar.style.backgroundColor = (percent > 50) ? '#4caf50' : (percent > 20) ? '#f1c40f' : '#e74c3c';
+    }
+
+    function setButtonsDisabled(disabled) { document.querySelectorAll('.b-btn').forEach(b => b.disabled = disabled); }
+
+    async function attack() {
+        if(isCapturing || isAnimating || !currentEnemy) return;
+        isAnimating = true; setButtonsDisabled(true);
+        const pUnit = document.getElementById('player-pos');
+        const eUnit = document.getElementById('enemy-pos');
+        const flash = document.getElementById('hit-flash');
+
+        pUnit.style.transform = "translate(40px, -40px)";
+        document.getElementById('battle-msg').innerText = `${myBox[0].name}の攻撃！`;
+        await new Promise(r => setTimeout(r, 200));
+        pUnit.style.transform = "translate(0, 0)";
+        flash.style.opacity = "0.6"; eUnit.classList.add('shake-anim');
+        currentEnemy.hp -= Math.floor(myBox[0].atk);
+        updateHPBar('e', (currentEnemy.hp/currentEnemy.maxHp*100));
+        await new Promise(r => setTimeout(r, 400));
+        flash.style.opacity = "0"; eUnit.classList.remove('shake-anim');
+
+        if(currentEnemy.hp <= 0) {
+            let dropped = currentEnemy.lv > 20 ? 3 : (currentEnemy.lv > 10 ? 2 : 1);
+            candyCount += dropped;
+            let chunkMsg = "";
+            if(Math.random() < 0.15) { chunkCount++; chunkMsg = "\nさらに「ふしぎな塊」を見つけた！"; }
+            document.getElementById('battle-msg').innerText = `${currentEnemy.name} を たおした！\nふしぎなアメを ${dropped}個 手に入れた！${chunkMsg}`;
+            await new Promise(r => setTimeout(r, 2000));
+            endBattle();
+            return;
+        }
+
+        await new Promise(r => setTimeout(r, 600));
+        document.getElementById('battle-msg').innerText = `${currentEnemy.name}の反撃！`;
+        eUnit.style.transform = "translate(-40px, 40px)";
+        await new Promise(r => setTimeout(r, 200));
+        eUnit.style.transform = "translate(0, 0)";
+        pUnit.classList.add('shake-anim');
+        myBox[0].hp -= Math.floor(currentEnemy.atk * 0.8);
+        updateHPBar('p', (myBox[0].hp/myBox[0].maxHp*100));
+        await new Promise(r => setTimeout(r, 400));
+        pUnit.classList.remove('shake-anim');
+
+        if(myBox[0].hp <= 0) {
+            myBox[0].hp = 0;
+            if(myBox.some(p => p.hp > 0)) {
+                document.getElementById('battle-msg').innerText = `${myBox[0].name}は力尽きた！ポケモンを選んでください！`;
+                setTimeout(() => openBox(true), 1500);
+            } else {
+                document.getElementById('battle-msg').innerText = "手持ちが 全員たおれた！\n目の前が 真っ暗になった！";
+                await new Promise(r => setTimeout(r, 2500));
+                myBox.forEach(p => p.hp = p.maxHp); endBattle();
+            }
+            return;
+        }
+        isAnimating = false; setButtonsDisabled(false);
+        document.getElementById('battle-msg').innerText = `どうする？`;
+    }
+
+    function tryCapture() {
+        if(isCapturing || isAnimating || !currentEnemy) return;
+        isCapturing = true; setButtonsDisabled(true);
+        const ball = document.getElementById('moving-ball');
+        const eImg = document.getElementById('e-img');
+        const stageRect = document.querySelector('.battle-stage').getBoundingClientRect();
+        const pImg = document.getElementById('p-img');
+        const pRect = pImg.getBoundingClientRect();
+        const eRect = eImg.getBoundingClientRect();
+        ball.style.display = 'block';
+        const startX = pRect.left + pRect.width/2 - stageRect.left;
+        const startY = pRect.top + pRect.height/2 - stageRect.top;
+        const endX = eRect.left + eRect.width/2 - stageRect.left;
+        const endY = eRect.top + eRect.height/2 - stageRect.top;
+        let start = null;
+        function step(timestamp) {
+            if (!start) start = timestamp;
+            let progress = (timestamp - start) / 700;
+            if (progress > 1) progress = 1;
+            ball.style.left = (startX + (endX - startX) * progress) + 'px';
+            ball.style.top = (startY + (endY - startY) * progress - Math.sin(progress * Math.PI) * 150) + 'px';
+            ball.style.transform = `rotate(${progress * 720}deg)`;
+            if (progress < 1) requestAnimationFrame(step);
+            else {
+                eImg.style.transition = "all 0.5s"; eImg.style.transform = "scale(0) rotate(360deg)";
+                setTimeout(() => {
+                    eImg.style.display = 'none'; eImg.style.transform = "";
+                    setTimeout(async () => {
+                        const hpRatio = currentEnemy.hp / currentEnemy.maxHp;
+                        const captureChance = 0.9 - (hpRatio * 0.7);
+                        if(Math.random() < captureChance) {
+                            document.getElementById('battle-msg').innerText = `やった！ ${currentEnemy.name} を つかまえたぞ！`;
+                            myBox.push({...currentEnemy, hp: currentEnemy.maxHp}); 
+                            await new Promise(r => setTimeout(r, 2000));
+                            endBattle();
+                        } else {
+                            document.getElementById('battle-msg').innerText = "逃げられた！";
+                            ball.style.display = 'none'; 
+                            eImg.style.display = 'block'; // 失敗した時は画像を表示に戻す
+                            eImg.style.transform = "scale(1)";
+                            isCapturing = false; setButtonsDisabled(false);
+                        }
+                    }, 1000);
+                }, 400);
+            }
+        }
+        requestAnimationFrame(step);
+    }
+
+    function endBattle() {
+        currentEnemy = null; isCapturing = false; isAnimating = false;
+        // バトル終了時にモンスターボールを確実に隠す
+        document.getElementById('moving-ball').style.display = 'none';
+        switchScene('world-view'); updateMapUI();
+    }
+
+    function openBox(forceSwitch = false) { 
+        selectedBoxIdx = null; renderBox(); switchScene('box-view'); 
+        document.getElementById('box-close-btn').style.display = forceSwitch ? "none" : "block";
+    }
+
+    function closeBox() { 
+        if(myBox[0].hp <= 0) return;
+        if(currentEnemy) { updateBattleUI(); switchScene('battle-view'); } 
+        else { switchScene('world-view'); } 
+    }
+
+    function renderBox() {
+        document.getElementById('candy-num').innerText = candyCount;
+        document.getElementById('chunk-num').innerText = chunkCount;
+        const p = myBox[0];
+        if(!p) return;
+        document.getElementById('active-partner').innerHTML = `<img src="${p.imgFront}" style="width:80px"><div style="flex-grow:1; font-size:13px"><b>${p.name}</b> Lv.${p.lv}<br>HP: ${p.hp}/${p.maxHp}<div class="hp-bar-outer"><div class="hp-bar-inner" style="width:${(p.hp/p.maxHp)*100}%"></div></div>EXP: ${p.exp}/${p.nextLv}<div class="exp-bar-outer"><div class="exp-bar-inner" style="width:${(p.exp/p.nextLv)*100}%"></div></div></div>`;
+        document.getElementById('box-grid').innerHTML = myBox.slice(1).map((p, i) => `<div class="box-card ${selectedBoxIdx === i+1 ? 'selected' : ''}" onclick="selectedBoxIdx=${i+1};renderBox();"><img src="${p.imgFront}"><div style="flex-grow:1"><b>${p.name}</b> Lv.${p.lv}<br><div class="hp-bar-outer"><div class="hp-bar-inner" style="width:${(p.hp/p.maxHp)*100}%"></div></div></div></div>`).join("");
+    }
+
+    function handleBoxAction(type) {
+        const idx = selectedBoxIdx === null ? 0 : selectedBoxIdx;
+        const p = myBox[idx]; if(!p) return;
+        if(type === 'level' && candyCount > 0) {
+            candyCount--; p.exp += 100;
+            while(p.exp >= p.nextLv) { p.exp -= p.nextLv; p.lv++; p.nextLv = p.lv * 50; p.maxHp += 10; p.hp = p.maxHp; p.atk += 2; }
+            renderBox(); updateMapUI();
+        } else if(type === 'chunk' && chunkCount > 0) {
+            chunkCount--; p.exp += 500;
+            while(p.exp >= p.nextLv) { p.exp -= p.nextLv; p.lv++; p.nextLv = p.lv * 50; p.maxHp += 10; p.hp = p.maxHp; p.atk += 2; }
+            renderBox(); updateMapUI();
+        } else if(type === 'lead' && selectedBoxIdx !== null) {
+            if(myBox[selectedBoxIdx].hp <= 0) { alert("ひんしのポケモンは選べません！"); return; }
+            const s = myBox.splice(selectedBoxIdx, 1)[0]; myBox.unshift(s); selectedBoxIdx = null;
+            renderBox(); updateMapUI(); document.getElementById('box-close-btn').style.display = "block"; 
+            if(currentEnemy) { isAnimating = false; updateBattleUI(); }
+        }
+    }
+
+    function updateMapUI() {
+        if(!myBox[0]) return;
+        const p = myBox[0];
+        const playerEl = document.getElementById('player');
+        if(playerEl) playerEl.innerHTML = `<img src="${p.imgFront}">`;
+        const miniStatusEl = document.getElementById('mini-status');
+        if(miniStatusEl) miniStatusEl.innerHTML = `<img src="${p.imgFront}"><div><b>${p.name}</b> Lv.${p.lv}<br>HP: ${p.hp}/${p.maxHp}<div class="hp-bar-outer"><div class="hp-bar-inner" style="width:${(p.hp/p.maxHp)*100}%"></div></div></div>`;
+    }
+</script>
+</body>
+</html>
