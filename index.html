@@ -3,12 +3,17 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>Poke-Hybrid Master RPG v23</title>
+    <title>Poke-Hybrid Master RPG v27.0</title>
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+    <link href="https://fonts.googleapis.com/css2?family=DotGothic16&display=swap" rel="stylesheet">
     <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
     <style>
         :root { --blue: #2a75bb; --accent: #ffcb05; --dark: #333; --exp: #3498db; --green: #4caf50; --hp-bg: #ccc; }
-        body { margin: 0; overflow: hidden; background: #000; font-family: sans-serif; user-select: none; }
+        body { 
+            margin: 0; overflow: hidden; background: #000; 
+            font-family: 'DotGothic16', sans-serif;
+            user-select: none; 
+        }
         
         .scene { width: 100vw; height: 100vh; position: absolute; top: 0; left: 0; display: none; overflow: hidden; background: #000; }
         .scene.active { display: flex; flex-direction: column; z-index: 100; }
@@ -18,7 +23,6 @@
         #player { width: 80px; height: 80px; position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); z-index: 20; pointer-events: none; }
         #player img { width: 100%; height: 100%; image-rendering: pixelated; }
         
-        /* 左下ステータス（ボタン化） */
         #mini-status { 
             position: absolute; bottom: 20px; left: 10px; width: 220px; 
             background: rgba(0,0,0,0.85); color: #fff; padding: 12px; 
@@ -26,31 +30,32 @@
             display: flex; align-items: center; gap: 12px; cursor: pointer;
             box-shadow: 0 4px 15px rgba(0,0,0,0.5);
         }
-        #mini-status:active { transform: scale(0.98); }
         #mini-status img { width: 60px; height: 60px; image-rendering: pixelated; background: rgba(255,255,255,0.15); border-radius: 50%; }
         .mini-guide { font-size: 10px; color: var(--accent); margin-bottom: 2px; }
 
         #system-msg {
-            position: absolute; bottom: 100px; left: 50%; transform: translateX(-50%);
+            position: absolute; top: 80px; left: 50%; transform: translateX(-50%);
             background: rgba(0,0,0,0.9); color: #fff; padding: 15px 30px;
             border-radius: 30px; border: 2px solid var(--accent); z-index: 1000;
             display: none; white-space: nowrap; font-weight: bold; text-align: center;
         }
 
-        #flash-overlay {
-            position: fixed; top: 0; left: 0; width: 100%; height: 100%;
-            background: white; opacity: 0; pointer-events: none; z-index: 2000;
-        }
+        #flash-overlay { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: white; opacity: 0; pointer-events: none; z-index: 2000; }
 
         .wild { width: 80px; height: 80px; position: absolute; z-index: 15; transform: translate(-40px, -40px); cursor: pointer; }
         .wild img { width: 100%; height: 100%; image-rendering: pixelated; }
         .building { width: 60px; height: 60px; position: absolute; z-index: 14; transform: translate(-30px, -30px); cursor: pointer; display: flex; align-items: center; justify-content: center; font-size: 50px; filter: drop-shadow(0 4px 4px rgba(0,0,0,0.5)); }
         .wild-lv-tag { background: rgba(0,0,0,0.8); color: white; font-size: 11px; font-weight: bold; border-radius: 4px; padding: 1px 5px; position: absolute; top: 5px; right: -5px; z-index: 16; border: 1px solid var(--accent); }
 
-        .top-btn { position: absolute; top: 10px; z-index: 110; padding: 10px; border: 2px solid white; border-radius: 8px; color: white; font-weight: bold; font-size: 12px; }
+        .top-btn { position: absolute; top: 10px; z-index: 110; padding: 10px; border: 2px solid white; border-radius: 8px; color: white; font-weight: bold; font-size: 12px; font-family: 'DotGothic16', sans-serif; }
+        .ver-tag { position: absolute; top: 15px; right: 15px; color: #fff; font-size: 14px; font-weight: bold; z-index: 110; text-shadow: 1px 1px 2px #000; }
+
         #controls { position: absolute; bottom: 30px; right: 20px; z-index: 110; opacity: 0.6; }
         .d-pad { display: grid; grid-template-columns: repeat(3, 60px); grid-template-rows: repeat(3, 60px); gap: 8px; }
         .d-pad button { width: 60px; height: 60px; border-radius: 50%; border: 2px solid #fff; background: #444; color: white; font-size: 20px; }
+
+        @keyframes shiny-sparkle { 0%, 100% { filter: brightness(1); } 50% { filter: brightness(2) contrast(1.5) hue-rotate(90deg); } }
+        .shiny-effect { animation: shiny-sparkle 1s infinite; }
 
         /* --- バトル --- */
         #battle-view { background: #87ceeb; }
@@ -61,30 +66,20 @@
         #enemy-pos { top: 15%; right: 10%; }
         #player-pos { bottom: 10%; left: 10%; }
         .pokemon-img { width: 120px; height: 120px; image-rendering: pixelated; filter: drop-shadow(0 10px 5px rgba(0,0,0,0.2)); transition: transform 0.6s ease-in, opacity 0.6s ease-in; }
-        
-        /* 倒された時の沈み込み演出 */
         .faint-anim { transform: translateY(100px) !important; opacity: 0 !important; }
-
         .status-window { width: 140px; background: rgba(255,255,255,0.95); border: 2px solid #444; border-radius: 10px; padding: 6px; font-size: 11px; margin-bottom: 5px; box-shadow: 3px 3px 0 rgba(0,0,0,0.2); }
         #battle-ui-container { height: 40%; background: #333; display: flex; flex-direction: column; z-index: 120; border-top: 4px solid #555;}
-        #battle-msg { height: 35%; color: white; padding: 12px; box-sizing: border-box; font-size: 16px; background: #222; overflow-y: auto;}
+        #battle-msg { height: 35%; color: white; padding: 12px; box-sizing: border-box; font-size: 16px; background: #222; overflow-y: auto; line-height: 1.4;}
         #battle-menu { height: 65%; display: grid; grid-template-columns: 1fr 1fr; gap: 10px; padding: 10px; box-sizing: border-box; }
-        #battle-menu button { border: none; border-radius: 8px; font-weight: bold; font-size: 18px; background: #eee; color: #000; box-shadow: 0 4px #999; }
-        #battle-menu button:disabled { background: #555; color: #888; box-shadow: none; }
-
+        #battle-menu button { border: none; border-radius: 8px; font-weight: bold; font-size: 18px; background: #eee; color: #000; box-shadow: 0 4px #999; font-family: 'DotGothic16', sans-serif; }
+        
         .hp-bar-outer { width: 100%; height: 6px; background: var(--hp-bg); border: 1px solid #000; border-radius: 3px; overflow: hidden; margin: 2px 0; }
-        .hp-bar-inner { height: 100%; background: var(--green); transition: width 0.3s, background-color 0.3s; }
-        .exp-bar-outer { width: 100%; height: 4px; background: #eee; border-radius: 2px; overflow: hidden; }
-        .exp-bar-inner { height: 100%; background: var(--exp); transition: width 0.3s; }
+        .hp-bar-inner { height: 100%; background: var(--green); transition: width 0.3s; }
 
         .overlay-scene { background: #ecf0f1; padding: 15px; box-sizing: border-box; z-index: 200; overflow-y: auto; }
         .box-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 10px; margin-top: 10px; }
         .box-card { background: #fff; border: 2px solid #ccc; border-radius: 12px; padding: 8px; display: flex; align-items: center; gap: 5px; }
         .box-card.selected { border-color: var(--accent); background: #fffdf0; box-shadow: 0 0 10px var(--accent); }
-        .box-card img { width: 50px; }
-        #moving-ball { position:absolute; width:35px; height:35px; background:url('https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/items/poke-ball.png') no-repeat center; background-size:contain; display:none; z-index: 500;}
-        @keyframes shake { 0% { transform: translate(0, 0); } 20% { transform: translate(12px, -12px); } 40% { transform: translate(-12px, 12px); } 60% { transform: translate(12px, 12px); } 80% { transform: translate(-12px, -12px); } 100% { transform: translate(0, 0); } }
-        .shake-anim { animation: shake 0.3s ease-in-out; }
     </style>
 </head>
 <body>
@@ -96,18 +91,17 @@
     <div id="mini-status" onclick="openBox()">
         <div style="font-size:12px;">読込中...</div>
     </div>
-    <div style="position:absolute; top:10px; width:100%; display:flex; justify-content:flex-end; padding:0 10px; box-sizing:border-box; z-index:110;">
-        <button class="top-btn" style="position:static; background:#e67e22; width:80px;" onclick="spawnWilds()">更新</button>
-    </div>
+    <div class="ver-tag">ver. 27.0</div>
+    <button class="top-btn" style="left:10px; background:#e67e22;" onclick="spawnWilds()">更新</button>
     <div id="map-bg"></div>
     <div id="player"></div>
     <div id="wild-layer"></div>
     <div id="controls">
         <div class="d-pad">
-            <button style="grid-column:2" onmousedown="startMove(0.0003, 0)" onmouseup="stopMove()" ontouchstart="startMove(0.0003, 0)" ontouchend="stopMove()">▲</button>
-            <button style="grid-column:1" onmousedown="startMove(0, -0.0004)" onmouseup="stopMove()" ontouchstart="startMove(0, -0.0004)" ontouchend="stopMove()">◀</button>
-            <button style="grid-column:2" onmousedown="startMove(-0.0003, 0)" onmouseup="stopMove()" ontouchstart="startMove(-0.0003, 0)" ontouchend="stopMove()">▼</button>
-            <button style="grid-column:3" onmousedown="startMove(0, 0.0004)" onmouseup="stopMove()" ontouchstart="startMove(0, 0.0004)" ontouchend="stopMove()">▶</button>
+            <button style="grid-column:2" onmousedown="handleMoveStart(0.00003, 0)" onmouseup="handleMoveEnd()" ontouchstart="handleMoveStart(0.00003, 0)" ontouchend="handleMoveEnd()">▲</button>
+            <button style="grid-column:1" onmousedown="handleMoveStart(0, -0.000045)" onmouseup="handleMoveEnd()" ontouchstart="handleMoveStart(0, -0.000045)" ontouchend="handleMoveEnd()">◀</button>
+            <button style="grid-column:2" onmousedown="handleMoveStart(-0.00003, 0)" onmouseup="handleMoveEnd()" ontouchstart="handleMoveStart(-0.00003, 0)" ontouchend="handleMoveEnd()">▼</button>
+            <button style="grid-column:3" onmousedown="handleMoveStart(0, 0.000045)" onmouseup="handleMoveEnd()" ontouchstart="handleMoveStart(0, 0.000045)" ontouchend="handleMoveEnd()">▶</button>
         </div>
     </div>
 </div>
@@ -125,15 +119,14 @@
             <img id="p-img" class="pokemon-img" src="">
             <div class="status-window"><b id="p-name">---</b> Lv.<span id="p-lv"></span><div class="hp-bar-outer"><div id="p-hp-bar" class="hp-bar-inner"></div></div></div>
         </div>
-        <div id="moving-ball"></div>
     </div>
     <div id="battle-ui-container">
         <div id="battle-msg">どうする？</div>
         <div id="battle-menu">
-            <button class="b-btn" onclick="attack()" style="background:#e74c3c; color:#fff;">攻撃</button>
-            <button class="b-btn" onclick="tryCapture()" style="background:#f1c40f;">捕まえる</button>
-            <button class="b-btn" onclick="openBox()" style="background:#fff;">ポケモン</button>
-            <button class="b-btn" onclick="endBattle()" style="background:#fff;">逃げる</button>
+            <button class="b-btn" onclick="attack()">攻撃</button>
+            <button class="b-btn" onclick="tryCapture()">捕まえる</button>
+            <button class="b-btn" onclick="openBox()">ポケモン</button>
+            <button class="b-btn" onclick="endBattle()">逃げる</button>
         </div>
     </div>
 </div>
@@ -153,15 +146,51 @@
         <button class="top-btn" style="position:static; background:var(--green); font-size: 14px;" onclick="handleBoxAction('level')">アメを使う</button>
         <button class="top-btn" style="position:static; background:#9b59b6; font-size: 14px; grid-column: span 2;" onclick="handleBoxAction('chunk')">ふしぎな塊を使う(EXP+500)</button>
     </div>
-    <button class="top-btn" id="box-close-btn" style="position:static; background:#7f8c8d; width:100%;" onclick="closeBox()">戻る</button>
+    <button class="top-btn" style="position:static; background:#7f8c8d; width:100%;" onclick="closeBox()">戻る</button>
 </div>
 
 <script>
+    const TYPE_CHART = {
+        normal: { rock: 0.5, ghost: 0, steel: 0.5 }, fire: { fire: 0.5, water: 0.5, grass: 2, ice: 2, bug: 2, rock: 0.5, dragon: 0.5, steel: 2 },
+        water: { fire: 2, water: 0.5, grass: 0.5, ground: 2, rock: 2, dragon: 0.5 }, grass: { fire: 0.5, water: 2, grass: 0.5, poison: 0.5, ground: 2, flying: 0.5, bug: 0.5, rock: 2, dragon: 0.5, steel: 0.5 },
+        electric: { water: 2, grass: 0.5, electric: 0.5, ground: 0, flying: 2, dragon: 0.5 }, ice: { fire: 0.5, water: 0.5, grass: 2, ice: 0.5, ground: 2, flying: 2, dragon: 2, steel: 0.5 },
+        fighting: { normal: 2, ice: 2, poison: 0.5, flying: 0.5, psychic: 0.5, bug: 0.5, rock: 2, ghost: 0, dark: 2, steel: 2, fairy: 0.5 }, poison: { grass: 2, poison: 0.5, ground: 0.5, rock: 0.5, ghost: 0.5, steel: 0, fairy: 2 },
+        ground: { fire: 2, electric: 2, grass: 0.5, poison: 2, flying: 0, bug: 0.5, rock: 2, steel: 2 }, flying: { grass: 2, electric: 0.5, fighting: 2, bug: 2, rock: 0.5, steel: 0.5 },
+        psychic: { fighting: 2, poison: 2, psychic: 0.5, dark: 0, steel: 0.5 }, bug: { fire: 0.5, grass: 2, fighting: 0.5, poison: 0.5, flying: 0.5, psychic: 2, ghost: 0.5, dark: 2, steel: 0.5, fairy: 0.5 },
+        rock: { fire: 2, ice: 2, fighting: 0.5, ground: 0.5, flying: 2, bug: 2, steel: 0.5 }, ghost: { normal: 0, psychic: 2, ghost: 2, dark: 0.5 },
+        dragon: { dragon: 2, steel: 0.5, fairy: 0 }, dark: { fighting: 0.5, psychic: 2, ghost: 2, dark: 0.5, fairy: 0.5 },
+        steel: { fire: 0.5, water: 0.5, electric: 0.5, ice: 2, rock: 2, steel: 0.5, fairy: 2 }, fairy: { fire: 0.5, fighting: 2, poison: 0.5, dragon: 2, dark: 2, steel: 0.5 }
+    };
+
     let map, myBox = [], wildList = [], currentEnemy = null;
     let candyCount = 10, chunkCount = 2, selectedBoxIdx = null;
     let isTransitioning = false, isCapturing = false, isAnimating = false;
     let currentCoords = { lat: 35.6895, lon: 139.6917 };
-    let moveInterval = null, pcActive = false, pcCoords = null;
+    let moveRequest = null, activeDLat = 0, activeDLon = 0;
+    let pcActive = false, pcCoords = null;
+
+    // GitHub音源の設定
+    const audioBattle = new Audio('battle.mp3');
+    const audioFanfare = new Audio('fanfare.mp3');
+    const themeTracks = [new Audio('theme.mp3'), new Audio('theme2.mp3'), new Audio('theme3.mp3')];
+    let currentTheme = null;
+
+    function stopAllAudio() {
+        [audioBattle, audioFanfare, ...themeTracks].forEach(a => {
+            a.pause();
+            a.currentTime = 0;
+        });
+    }
+
+    function playMapTheme() {
+        stopAllAudio();
+        currentTheme = themeTracks[Math.floor(Math.random() * themeTracks.length)];
+        currentTheme.loop = true;
+        currentTheme.volume = 0.4;
+        currentTheme.play().catch(() => {});
+    }
+
+    const sfxHeal = new Audio('https://www.soundjay.com/misc/sounds/magic-chime-01.mp3');
 
     window.onload = async () => { setupMap(); await initStarter(); };
 
@@ -169,14 +198,10 @@
         if (map) return;
         map = L.map('map-bg', { zoomControl: false, dragging: false, touchZoom: false, attributionControl: false }).setView([currentCoords.lat, currentCoords.lon], 17);
         L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png').addTo(map);
-        if (navigator.geolocation) {
-            navigator.geolocation.getCurrentPosition(pos => {
-                currentCoords.lat = pos.coords.latitude;
-                currentCoords.lon = pos.coords.longitude;
-                map.setView([currentCoords.lat, currentCoords.lon]);
-                spawnWilds();
-            }, () => spawnWilds());
-        } else { spawnWilds(); }
+        spawnWilds();
+        document.body.onclick = () => { 
+            if(document.getElementById('world-view').classList.contains('active') && (!currentTheme || currentTheme.paused)) playMapTheme(); 
+        };
     }
 
     async function initStarter() {
@@ -194,20 +219,18 @@
                 const sData = await sRes.json();
                 jpName = sData.names.find(n => n.language.name === "ja-Hrkt").name;
             } catch(e) {}
+            const isShiny = Math.random() < 0.01;
+            if(isShiny) jpName = "★" + jpName;
             return {
                 id: d.id, name: jpName, lv: lv, exp: 0, nextLv: lv * 50,
                 hp: lv * 12 + 50, maxHp: lv * 12 + 50, atk: lv * 3 + 10,
-                imgFront: d.sprites.front_default, imgBack: d.sprites.back_default || d.sprites.front_default,
-                cries: d.cries ? d.cries.latest : null
+                imgFront: isShiny ? d.sprites.front_shiny : d.sprites.front_default,
+                imgBack: isShiny ? d.sprites.back_shiny : (d.sprites.back_default || d.sprites.front_default),
+                cries: d.cries ? d.cries.latest : null,
+                types: d.types.map(t => t.type.name),
+                isShiny: isShiny
             };
         } catch(e) { return null; }
-    }
-
-    function playCry(url) {
-        if (!url) return;
-        const audio = new Audio(url);
-        audio.volume = 0.5;
-        audio.play().catch(e => console.log("Audio play blocked"));
     }
 
     function showSystemMsg(text, duration = 2500) {
@@ -219,51 +242,58 @@
     function switchScene(id) {
         document.querySelectorAll('.scene').forEach(s => s.classList.remove('active'));
         document.getElementById(id).classList.add('active');
+        if(id === 'battle-view') {
+            stopAllAudio();
+            audioBattle.loop = true;
+            audioBattle.play().catch(() => {});
+        } else if(id === 'world-view') {
+            playMapTheme();
+        }
     }
 
-    function startMove(dLat, dLon) {
-        if(moveInterval || isTransitioning || currentEnemy) return;
-        const doMove = () => {
-            currentCoords.lat += dLat; currentCoords.lon += dLon;
-            if(map) map.panTo([currentCoords.lat, currentCoords.lon], {animate:true, duration:0.1});
-            checkCollision();
-        };
-        doMove(); moveInterval = setInterval(doMove, 150);
+    function handleMoveStart(dLat, dLon) {
+        if(isTransitioning || currentEnemy) return;
+        activeDLat = dLat; activeDLon = dLon;
+        if(!moveRequest) moveLoop();
     }
-    function stopMove() { clearInterval(moveInterval); moveInterval = null; }
+    function handleMoveEnd() { activeDLat = 0; activeDLon = 0; cancelAnimationFrame(moveRequest); moveRequest = null; }
+    function moveLoop() {
+        if(activeDLat === 0 && activeDLon === 0) return;
+        currentCoords.lat += activeDLat; currentCoords.lon += activeDLon;
+        map.panTo([currentCoords.lat, currentCoords.lon], {animate: false});
+        checkCollision();
+        moveRequest = requestAnimationFrame(moveLoop);
+    }
+
+    function spawnWilds() {
+        document.getElementById('wild-layer').innerHTML = ""; 
+        wildList = []; spawnPokeCenter();
+        for(let i=0; i<8; i++) spawnSingleWild();
+    }
 
     function spawnPokeCenter() {
         const lat = currentCoords.lat + (Math.random() - 0.5) * 0.006;
         const lon = currentCoords.lon + (Math.random() - 0.5) * 0.006;
         pcCoords = { lat, lon, id: 'pc-' + Date.now() }; pcActive = true;
         const div = document.createElement('div');
-        div.className = 'building'; div.id = pcCoords.id;
-        div.innerText = "🏥"; 
+        div.className = 'building'; div.id = pcCoords.id; div.innerText = "🏥"; 
         document.getElementById('wild-layer').appendChild(div);
         const sync = () => { if(!map) return; const p = map.latLngToContainerPoint([lat, lon]); div.style.left = p.x + 'px'; div.style.top = p.y + 'px'; };
         map.on('move', sync); sync();
     }
 
-    async function spawnWilds() {
-        document.getElementById('wild-layer').innerHTML = ""; 
-        wildList = []; spawnPokeCenter();
-        for(let i=0; i<8; i++) await spawnSingleWild();
-    }
-
     async function spawnSingleWild() {
         let id = Math.floor(Math.random() * 151) + 1;
-        const legendaryIds = [144, 145, 146, 150, 151];
-        if (legendaryIds.includes(id) && Math.random() > 0.05) { id = Math.floor(Math.random() * 143) + 1; }
+        if ([144, 145, 146, 150, 151].includes(id) && Math.random() > 0.05) id = Math.floor(Math.random() * 143) + 1;
         const uId = 'wild-' + Date.now() + '-' + Math.random(); 
         const wLat = currentCoords.lat + (Math.random() - 0.5) * 0.015;
         const wLon = currentCoords.lon + (Math.random() - 0.5) * 0.015;
-        const maxMyLv = myBox.length > 0 ? Math.max(...myBox.map(p => p.lv)) : 5;
-        const wildLv = Math.max(1, maxMyLv + Math.floor(Math.random() * 7) - 3);
-        const wp = { uId, id, lv: wildLv, lat: wLat, lon: wLon };
+        const maxLv = myBox.length > 0 ? Math.max(...myBox.map(p => p.lv)) : 5;
+        const wp = { uId, id, lv: Math.max(1, maxLv + Math.floor(Math.random() * 7) - 3), lat: wLat, lon: wLon };
         wildList.push(wp);
         const div = document.createElement('div');
         div.className = 'wild'; div.id = uId;
-        div.innerHTML = `<span class="wild-lv-tag">Lv.${wildLv}</span><img src="https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/${id}.png">`;
+        div.innerHTML = `<span class="wild-lv-tag">Lv.${wp.lv}</span><img src="https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/${id}.png">`;
         document.getElementById('wild-layer').appendChild(div);
         const sync = () => { if(!map) return; const p = map.latLngToContainerPoint([wLat, wLon]); div.style.left = p.x + 'px'; div.style.top = p.y + 'px'; };
         map.on('move', sync); sync();
@@ -272,42 +302,34 @@
 
     function checkCollision() {
         if(pcActive && pcCoords) {
-            const distPC = Math.sqrt((currentCoords.lat - pcCoords.lat)**2 + (currentCoords.lon - pcCoords.lon)**2);
-            if(distPC < 0.0006) {
-                myBox.forEach(p => p.hp = p.maxHp);
-                updateMapUI(); showSystemMsg("手持ちのポケモンが 全回復しました！");
-                const pcEl = document.getElementById(pcCoords.id); if(pcEl) pcEl.remove();
-                pcActive = false;
+            const dist = Math.sqrt((currentCoords.lat - pcCoords.lat)**2 + (currentCoords.lon - pcCoords.lon)**2);
+            if(dist < 0.0006) {
+                sfxHeal.play(); myBox.forEach(p => p.hp = p.maxHp); updateMapUI();
+                showSystemMsg("体力が全回復しました！");
+                const el = document.getElementById(pcCoords.id); if(el) el.remove(); pcActive = false;
             }
         }
-        wildList.forEach((wp) => {
-            const dist = Math.sqrt((currentCoords.lat - wp.lat)**2 + (currentCoords.lon - wp.lon)**2);
-            if(dist < 0.0006) { startBattleSequence(wp); }
+        wildList.forEach(wp => {
+            if (Math.sqrt((currentCoords.lat - wp.lat)**2 + (currentCoords.lon - wp.lon)**2) < 0.0006) startBattleSequence(wp);
         });
     }
 
     async function startBattleSequence(wp) {
         if(isTransitioning) return;
-        isTransitioning = true; stopMove();
-        
-        const flash = document.getElementById('flash-overlay');
-        for(let i=0; i<3; i++) {
-            flash.style.opacity = "0.8"; await new Promise(r => setTimeout(r, 100));
-            flash.style.opacity = "0"; await new Promise(r => setTimeout(r, 100));
-        }
-
+        isTransitioning = true; handleMoveEnd();
         const wildEl = document.getElementById(wp.uId); if(wildEl) wildEl.remove();
         wildList = wildList.filter(item => item.uId !== wp.uId);
+        const flash = document.getElementById('flash-overlay');
+        for(let i=0; i<3; i++) { flash.style.opacity = "0.8"; await new Promise(r => setTimeout(r, 100)); flash.style.opacity = "0"; await new Promise(r => setTimeout(r, 100)); }
         const data = await getPokeData(wp.id, wp.lv);
         if(!data) { isTransitioning = false; return; }
         currentEnemy = {...data, hp: data.maxHp, uId: wp.uId};
-
         const eImg = document.getElementById('e-img');
         eImg.classList.remove('faint-anim');
-        eImg.style.display = 'block'; eImg.style.transform = ""; eImg.style.transition = "";
-
+        eImg.style.display = 'block'; eImg.style.opacity = "1"; eImg.style.transform = "translateY(0)"; eImg.style.transition = "";
+        if(currentEnemy.isShiny) eImg.classList.add('shiny-effect'); else eImg.classList.remove('shiny-effect');
         updateBattleUI(); switchScene('battle-view');
-        playCry(currentEnemy.cries); 
+        new Audio(currentEnemy.cries).play().catch(()=>{});
         isTransitioning = false;
     }
 
@@ -323,7 +345,7 @@
         document.getElementById('p-img').src = (p.hp > 0) ? p.imgBack : "";
         updateHPBar('p', (p.hp/p.maxHp*100));
         document.getElementById('battle-msg').innerText = `${currentEnemy.name}が あらわれた！`;
-        setButtonsDisabled(p.hp <= 0);
+        document.querySelectorAll('.b-btn').forEach(b => b.disabled = false);
     }
 
     function updateHPBar(prefix, percent) {
@@ -333,61 +355,62 @@
         bar.style.backgroundColor = (percent > 50) ? '#4caf50' : (percent > 20) ? '#f1c40f' : '#e74c3c';
     }
 
-    function setButtonsDisabled(disabled) { document.querySelectorAll('.b-btn').forEach(b => b.disabled = disabled); }
-
     async function attack() {
         if(isCapturing || isAnimating || !currentEnemy) return;
-        isAnimating = true; setButtonsDisabled(true);
-        const pUnit = document.getElementById('player-pos');
-        const eUnit = document.getElementById('enemy-pos');
-        const eImg = document.getElementById('e-img');
-        const flash = document.getElementById('hit-flash');
+        isAnimating = true; document.querySelectorAll('.b-btn').forEach(b => b.disabled = true);
+        const pUnit = document.getElementById('player-pos'), eUnit = document.getElementById('enemy-pos'), flash = document.getElementById('hit-flash');
 
         pUnit.style.transform = "translate(40px, -40px)";
         document.getElementById('battle-msg').innerText = `${myBox[0].name}の攻撃！`;
         await new Promise(r => setTimeout(r, 200));
         pUnit.style.transform = "translate(0, 0)";
-        flash.style.opacity = "0.6"; eUnit.classList.add('shake-anim');
-        currentEnemy.hp -= Math.floor(myBox[0].atk);
+
+        let mult = 1.0;
+        myBox[0].types.forEach(a => currentEnemy.types.forEach(d => mult *= (TYPE_CHART[a] ? (TYPE_CHART[a][d] ?? 1.0) : 1.0)));
+        const isCrit = Math.random() < 0.0625;
+        if(isCrit) mult *= 1.5;
+
+        flash.style.opacity = mult > 1 ? "0.9" : "0.5";
+        eUnit.classList.add('shake-anim');
+        currentEnemy.hp -= Math.floor(myBox[0].atk * mult);
         updateHPBar('e', (currentEnemy.hp/currentEnemy.maxHp*100));
-        await new Promise(r => setTimeout(r, 400));
+
+        let msg = (mult > 1 ? "\nこうかは ばつぐんだ！" : (mult < 1 && mult > 0 ? "\nこうかは いまひとつの ようだ…" : ""));
+        if(isCrit) msg += '\n<span class="critical-msg">きゅうしょに あたった！</span>';
+        document.getElementById('battle-msg').innerHTML += msg;
+
+        await new Promise(r => setTimeout(r, 600));
         flash.style.opacity = "0"; eUnit.classList.remove('shake-anim');
 
         if(currentEnemy.hp <= 0) {
-            // --- 撃破演出開始 ---
-            playCry(currentEnemy.cries); // 断末魔
-            eImg.classList.add('faint-anim'); // 沈み込みアニメーション
-            await new Promise(r => setTimeout(r, 700)); // アニメーションを待つ
-
-            let droppedCandy = currentEnemy.lv > 20 ? 3 : (currentEnemy.lv > 10 ? 2 : 1);
-            candyCount += droppedCandy;
-            let itemText = `ふしぎなアメを ${droppedCandy}個 手に入れた！`;
-            
-            if(Math.random() < 0.15) { 
-                chunkCount++; 
-                itemText = `ふしぎな塊を 1個 手に入れた！`; 
-            }
-            
-            document.getElementById('battle-msg').innerText = `${currentEnemy.name} を たおした！\n${itemText}`;
-            await new Promise(r => setTimeout(r, 2200));
+            new Audio(currentEnemy.cries).play().catch(()=>{});
+            document.getElementById('e-img').classList.add('faint-anim');
+            await new Promise(r => setTimeout(r, 700));
+            let drop = currentEnemy.lv > 20 ? 3 : (currentEnemy.lv > 10 ? 2 : 1);
+            candyCount += drop;
+            let itemMsg = `ふしぎなアメを ${drop}個 手に入れた！`;
+            if(Math.random() < 0.15) { chunkCount++; itemMsg = `ふしぎな塊を 1個 手に入れた！`; }
+            document.getElementById('battle-msg').innerText = `${currentEnemy.name}を たおした！\n${itemMsg}`;
+            await new Promise(r => setTimeout(r, 2000));
             endBattle(); return;
         }
 
         await new Promise(r => setTimeout(r, 600));
         document.getElementById('battle-msg').innerText = `${currentEnemy.name}の反撃！`;
         eUnit.style.transform = "translate(-40px, 40px)";
-        await new Promise(r => setTimeout(r, 200));
-        eUnit.style.transform = "translate(0, 0)";
+        await new Promise(r => setTimeout(r, 200)); eUnit.style.transform = "translate(0, 0)";
         pUnit.classList.add('shake-anim');
-        myBox[0].hp -= Math.floor(currentEnemy.atk * 0.8);
+        let eMult = 1.0;
+        currentEnemy.types.forEach(a => myBox[0].types.forEach(d => eMult *= (TYPE_CHART[a] ? (TYPE_CHART[a][d] ?? 1.0) : 1.0)));
+        myBox[0].hp -= Math.floor(currentEnemy.atk * 0.8 * eMult);
         updateHPBar('p', (myBox[0].hp/myBox[0].maxHp*100));
-        await new Promise(r => setTimeout(r, 400));
-        pUnit.classList.remove('shake-anim');
+        if(eMult > 1) document.getElementById('battle-msg').innerText += "\nこうかは ばつぐんだ！";
+        await new Promise(r => setTimeout(r, 600)); pUnit.classList.remove('shake-anim');
 
         if(myBox[0].hp <= 0) {
             myBox[0].hp = 0;
             if(myBox.some(p => p.hp > 0)) {
-                document.getElementById('battle-msg').innerText = `${myBox[0].name}は力尽きた！\nつぎの ポケモンを えらんでください！`;
+                document.getElementById('battle-msg').innerText = `${myBox[0].name}は力尽きた！\n次のポケモンを選んでください！`;
                 setTimeout(() => openBox(true), 1500);
             } else {
                 document.getElementById('battle-msg').innerText = "手持ちが 全員たおれた！\n目の前が 真っ暗になった！";
@@ -396,52 +419,43 @@
             }
             return;
         }
-        isAnimating = false; setButtonsDisabled(false);
+        isAnimating = false; document.querySelectorAll('.b-btn').forEach(b => b.disabled = false);
         document.getElementById('battle-msg').innerText = `どうする？`;
     }
 
     function tryCapture() {
         if(isCapturing || isAnimating || !currentEnemy) return;
-        isCapturing = true; setButtonsDisabled(true);
-        const ball = document.getElementById('moving-ball');
-        const eImg = document.getElementById('e-img');
-        const stageRect = document.querySelector('.battle-stage').getBoundingClientRect();
-        const pImg = document.getElementById('p-img');
-        const pRect = pImg.getBoundingClientRect();
-        const eRect = eImg.getBoundingClientRect();
-        ball.style.display = 'block';
-        const startX = pRect.left + pRect.width/2 - stageRect.left;
-        const startY = pRect.top + pRect.height/2 - stageRect.top;
-        const endX = eRect.left + eRect.width/2 - stageRect.left;
-        const endY = eRect.top + eRect.height/2 - stageRect.top;
-        let start = null;
-        function step(timestamp) {
-            if (!start) start = timestamp;
-            let progress = (timestamp - start) / 700;
-            if (progress > 1) progress = 1;
+        isCapturing = true; document.querySelectorAll('.b-btn').forEach(b => b.disabled = true);
+        const ball = document.createElement('div');
+        ball.className = "moving-ball-sfx";
+        ball.style = "position:absolute; width:35px; height:35px; background:url('https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/items/poke-ball.png') no-repeat center; background-size:contain; z-index: 500;";
+        document.querySelector('.battle-stage').appendChild(ball);
+        const pRect = document.getElementById('p-img').getBoundingClientRect(), eRect = document.getElementById('e-img').getBoundingClientRect(), sRect = document.querySelector('.battle-stage').getBoundingClientRect();
+        let start = null, startX = pRect.left + 60 - sRect.left, startY = pRect.top + 60 - sRect.top, endX = eRect.left + 60 - sRect.left, endY = eRect.top + 60 - sRect.top;
+        function step(ts) {
+            if(!start) start = ts; let progress = (ts - start) / 700;
+            if(progress > 1) progress = 1;
             ball.style.left = (startX + (endX - startX) * progress) + 'px';
             ball.style.top = (startY + (endY - startY) * progress - Math.sin(progress * Math.PI) * 150) + 'px';
             ball.style.transform = `rotate(${progress * 720}deg)`;
-            if (progress < 1) requestAnimationFrame(step);
+            if(progress < 1) requestAnimationFrame(step);
             else {
-                eImg.style.transition = "all 0.5s"; eImg.style.transform = "scale(0) rotate(360deg)";
-                setTimeout(() => {
-                    eImg.style.display = 'none'; eImg.style.transform = "";
-                    setTimeout(async () => {
-                        const hpRatio = currentEnemy.hp / currentEnemy.maxHp;
-                        const captureChance = 0.9 - (hpRatio * 0.7);
-                        if(Math.random() < captureChance) {
-                            document.getElementById('battle-msg').innerText = `やった！ ${currentEnemy.name} を つかまえたぞ！`;
-                            myBox.push({...currentEnemy, hp: currentEnemy.maxHp}); 
-                            await new Promise(r => setTimeout(r, 2000));
-                            endBattle();
-                        } else {
-                            document.getElementById('battle-msg').innerText = "逃げられた！";
-                            ball.style.display = 'none'; eImg.style.display = 'block'; eImg.style.transform = "scale(1)";
-                            isCapturing = false; setButtonsDisabled(false);
-                        }
-                    }, 1000);
-                }, 400);
+                document.getElementById('e-img').style.opacity = "0";
+                setTimeout(async () => {
+                    if(Math.random() < (0.9 - (currentEnemy.hp/currentEnemy.maxHp * 0.7))) {
+                        // 捕獲成功ファンファーレの再生
+                        stopAllAudio();
+                        audioFanfare.play().catch(() => {});
+                        document.getElementById('battle-msg').innerText = `${currentEnemy.name}を つかまえた！`;
+                        myBox.push({...currentEnemy, hp: currentEnemy.maxHp}); 
+                        ball.remove();
+                        await new Promise(r => setTimeout(r, 4000)); endBattle();
+                    } else {
+                        document.getElementById('battle-msg').innerText = "逃げられた！";
+                        ball.remove(); document.getElementById('e-img').style.opacity = "1";
+                        isCapturing = false; document.querySelectorAll('.b-btn').forEach(b => b.disabled = false);
+                    }
+                }, 1000);
             }
         }
         requestAnimationFrame(step);
@@ -449,60 +463,42 @@
 
     function endBattle() {
         currentEnemy = null; isCapturing = false; isAnimating = false;
-        document.getElementById('moving-ball').style.display = 'none';
+        document.querySelectorAll('.moving-ball-sfx').forEach(el => el.remove());
         switchScene('world-view'); updateMapUI();
     }
 
-    function openBox(forceSwitch = false) { 
+    function openBox(force = false) { 
         selectedBoxIdx = null; renderBox(); switchScene('box-view'); 
-        document.getElementById('box-close-btn').style.display = forceSwitch ? "none" : "block";
+        document.getElementById('box-close-btn').style.display = force ? "none" : "block";
     }
 
-    function closeBox() { 
-        if(myBox[0].hp <= 0) return;
-        if(currentEnemy) { updateBattleUI(); switchScene('battle-view'); } 
-        else { switchScene('world-view'); } 
-    }
+    function closeBox() { if(myBox[0].hp > 0) currentEnemy ? switchScene('battle-view') : switchScene('world-view'); }
 
     function renderBox() {
         document.getElementById('candy-num').innerText = candyCount;
         document.getElementById('chunk-num').innerText = chunkCount;
         const p = myBox[0]; if(!p) return;
-        document.getElementById('active-partner').innerHTML = `<img src="${p.imgFront}" style="width:80px"><div style="flex-grow:1; font-size:13px"><b>${p.name}</b> Lv.${p.lv}<br>HP: ${p.hp}/${p.maxHp}<div class="hp-bar-outer"><div class="hp-bar-inner" style="width:${(p.hp/p.maxHp)*100}%"></div></div>EXP: ${p.exp}/${p.nextLv}<div class="exp-bar-outer"><div class="exp-bar-inner" style="width:${(p.exp/p.nextLv)*100}%"></div></div></div>`;
-        document.getElementById('box-grid').innerHTML = myBox.slice(1).map((p, i) => `<div class="box-card ${selectedBoxIdx === i+1 ? 'selected' : ''}" onclick="selectedBoxIdx=${i+1};renderBox();"><img src="${p.imgFront}"><div style="flex-grow:1"><b>${p.name}</b> Lv.${p.lv}<br><div class="hp-bar-outer"><div class="hp-bar-inner" style="width:${(p.hp/p.maxHp)*100}%"></div></div></div></div>`).join("");
+        document.getElementById('active-partner').innerHTML = `<img src="${p.imgFront}" class="${p.isShiny ? 'shiny-effect' : ''}"><div style="flex-grow:1; font-size:13px"><b>${p.name}</b> Lv.${p.lv}<br>HP: ${p.hp}/${p.maxHp}<div class="hp-bar-outer"><div class="hp-bar-inner" style="width:${(p.hp/p.maxHp)*100}%"></div></div>EXP: ${p.exp}/${p.nextLv}<div class="exp-bar-outer"><div class="exp-bar-inner" style="width:${(p.exp/p.nextLv)*100}%"></div></div></div>`;
+        document.getElementById('box-grid').innerHTML = myBox.slice(1).map((p, i) => `<div class="box-card ${selectedBoxIdx === i+1 ? 'selected' : ''}" onclick="selectedBoxIdx=${i+1};renderBox();"><img src="${p.imgFront}" class="${p.isShiny ? 'shiny-effect' : ''}"><div style="flex-grow:1"><b>${p.name}</b> Lv.${p.lv}<br><div class="hp-bar-outer"><div class="hp-bar-inner" style="width:${(p.hp/p.maxHp)*100}%"></div></div></div></div>`).join("");
     }
 
     function handleBoxAction(type) {
-        const idx = selectedBoxIdx === null ? 0 : selectedBoxIdx;
-        const p = myBox[idx]; if(!p) return;
-        if(type === 'level' && candyCount > 0) {
-            candyCount--; p.exp += 100;
-            while(p.exp >= p.nextLv) { p.exp -= p.nextLv; p.lv++; p.nextLv = p.lv * 50; p.maxHp += 10; p.hp = p.maxHp; p.atk += 2; }
-            renderBox(); updateMapUI();
-        } else if(type === 'chunk' && chunkCount > 0) {
-            chunkCount--; p.exp += 500;
+        const p = myBox[selectedBoxIdx ?? 0]; if(!p) return;
+        if((type === 'level' && candyCount > 0) || (type === 'chunk' && chunkCount > 0)) {
+            type === 'level' ? candyCount-- : chunkCount--; p.exp += type === 'level' ? 100 : 500;
             while(p.exp >= p.nextLv) { p.exp -= p.nextLv; p.lv++; p.nextLv = p.lv * 50; p.maxHp += 10; p.hp = p.maxHp; p.atk += 2; }
             renderBox(); updateMapUI();
         } else if(type === 'lead' && selectedBoxIdx !== null) {
-            if(myBox[selectedBoxIdx].hp <= 0) { alert("ひんしのポケモンは選べません！"); return; }
-            const s = myBox.splice(selectedBoxIdx, 1)[0]; myBox.unshift(s); selectedBoxIdx = null;
-            renderBox(); updateMapUI(); document.getElementById('box-close-btn').style.display = "block"; 
-            if(currentEnemy) { isAnimating = false; updateBattleUI(); }
+            if(myBox[selectedBoxIdx].hp <= 0) return alert("ひんしのポケモンは選べません！");
+            myBox.unshift(myBox.splice(selectedBoxIdx, 1)[0]); selectedBoxIdx = null;
+            renderBox(); updateMapUI(); document.getElementById('box-close-btn').style.display = "block";
         }
     }
 
     function updateMapUI() {
         if(!myBox[0]) return;
-        const p = myBox[0];
-        document.getElementById('player').innerHTML = `<img src="${p.imgFront}">`;
-        document.getElementById('mini-status').innerHTML = `
-            <img src="${p.imgFront}">
-            <div style="flex-grow:1">
-                <div class="mini-guide">手持ちのポケモン一覧</div>
-                <b>${p.name}</b> Lv.${p.lv}<br>
-                HP: ${p.hp}/${p.maxHp}
-                <div class="hp-bar-outer"><div class="hp-bar-inner" style="width:${(p.hp/p.maxHp)*100}%"></div></div>
-            </div>`;
+        document.getElementById('player').innerHTML = `<img src="${myBox[0].imgFront}" class="${myBox[0].isShiny ? 'shiny-effect' : ''}">`;
+        document.getElementById('mini-status').innerHTML = `<img src="${myBox[0].imgFront}" class="${myBox[0].isShiny ? 'shiny-effect' : ''}"><div style="flex-grow:1"><div class="mini-guide">手持ちのポケモン一覧</div><b>${myBox[0].name}</b> Lv.${myBox[0].lv}<br>HP: ${myBox[0].hp}/${myBox[0].maxHp}<div class="hp-bar-outer"><div class="hp-bar-inner" style="width:${(myBox[0].hp/myBox[0].maxHp)*100}%"></div></div></div>`;
     }
 </script>
 </body>
