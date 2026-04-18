@@ -1,0 +1,56 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>私だけのポケモンGO</title>
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+    <style>
+        body, html { margin: 0; padding: 0; height: 100%; width: 100%; }
+        #map { height: 100%; width: 100%; }
+        #ui {
+            position: absolute; bottom: 20px; left: 50%; transform: translateX(-50%);
+            z-index: 1000; background: white; padding: 15px; border-radius: 20px;
+            text-align: center; box-shadow: 0 4px 10px rgba(0,0,0,0.3); font-weight: bold;
+        }
+        /* モンスターの画像のスタイル */
+        .pokemon-icon {
+            filter: drop-shadow(0 0 5px rgba(255,255,0,0.8));
+            cursor: pointer;
+            transition: transform 0.2s;
+        }
+        .pokemon-icon:active { transform: scale(0.8); }
+    </style>
+</head>
+<body>
+
+    <div id="ui">
+        <span id="status">ポケモンを探そう！</span><br>
+        <small>捕まえた数: <span id="score">0</span></small>
+    </div>
+    <div id="map"></div>
+
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+    <script>
+        const map = L.map('map').setView([35.681236, 139.767125], 18);
+        let score = 0;
+
+        L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png').addTo(map);
+
+        // --- ポケモンを出現させる関数 ---
+        function spawnPokemon(lat, lng) {
+            // PokeAPIからピカチュウの画像を取得（25番がピカチュウ）
+            const pokemonId = 25; 
+            const imageUrl = `https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/${pokemonId}.png`;
+
+            const icon = L.icon({
+                iconUrl: imageUrl,
+                iconSize: [80, 80],
+                iconAnchor: [40, 40],
+                className: 'pokemon-icon'
+            });
+
+            const marker = L.marker([lat, lng], { icon: icon }).addTo(map);
+
+            // モンスターをタップした時の処理
+            marker.on('click', () =>
